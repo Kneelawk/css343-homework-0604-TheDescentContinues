@@ -1,7 +1,7 @@
 name: build
 
 env:
-  PROJECT_NAME: hello_css343
+  PROJECT_NAME: css343-homework-0604-TheDescentContinues
 
 on: [ pull_request, push ]
 
