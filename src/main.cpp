@@ -21,14 +21,14 @@ enum TokenType {
 };
 
 struct Token {
-    TokenType type;
+    TokenType type = LEXICAL_ERROR;
     string value;
 
-    Token() {
-    }
+    Token() = default;
 
     Token(const TokenType type, const string &value)
-        : type(type), value(value) { ; }
+        : type(type), value(value) {
+    }
 
     bool operator==(const Token &other) const {
         return type == other.type && value == other.value;
@@ -40,7 +40,7 @@ class Lexer {
     string remaining;
 
 public:
-    Lexer(const string &input)
+    explicit Lexer(const string &input)
         : input(input) {
         remaining = input;
     }
@@ -48,7 +48,7 @@ public:
     Token getNextToken() {
         Token token;
         do {
-            if (remaining.size() == 0) {
+            if (remaining.empty()) {
                 token = Token(NO_MORE_TOKENS, "");
                 break;
             }
@@ -89,8 +89,7 @@ public:
 
     virtual string toString() = 0;
 
-    virtual ~ASTNode() {
-    }
+    virtual ~ASTNode() = default;
 };
 
 class ASTNodeSubtract final : public ASTNode {
@@ -101,7 +100,7 @@ public:
     ASTNodeSubtract(ASTNode *pLeft, ASTNode *pRight)
         : pLeft(pLeft), pRight(pRight) { ; }
 
-    ~ASTNodeSubtract() {
+    ~ASTNodeSubtract() override {
         delete pLeft;
         delete pRight;
     }
@@ -119,7 +118,7 @@ class ASTNodeNumber final : public ASTNode {
     int number;
 
 public:
-    ASTNodeNumber(const int number)
+    explicit ASTNodeNumber(const int number)
         : number(number) {
     }
 
@@ -157,14 +156,13 @@ class ASTParser {
             lexer.removeToken(token);
             pNode = new ASTNodeNumber(stoi(token.value));
         } else {
-            throw new std::runtime_error("parse error");
+            throw std::runtime_error("parse error");
         }
         return pNode;
     }
 
 public:
-    ASTParser() {
-    }
+    ASTParser() = default;
 
     ASTNode *parse(const string &statement) {
         Lexer lexer(statement);
@@ -193,14 +191,13 @@ class EvalParser {
             lexer.removeToken(token);
             pNode = stoi(token.value);
         } else {
-            throw new std::runtime_error("parse error");
+            throw std::runtime_error("parse error");
         }
         return pNode;
     }
 
 public:
-    EvalParser() {
-    }
+    EvalParser() = default;
 
     int parse(const string &statement) {
         Lexer lexer(statement);
