@@ -1,3 +1,4 @@
+#include <cmath>
 #include <regex>
 #include <string>
 #include <iostream>
@@ -14,7 +15,13 @@ using std::string;
 
 enum TokenType {
     NUMBER,
+    PLUS,
     MINUS,
+    MULTIPLY,
+    DIVIDE,
+    POWER,
+    LPAREN,
+    RPAREN,
     WHITESPACE,
     NO_MORE_TOKENS,
     LEXICAL_ERROR
@@ -56,8 +63,20 @@ public:
             smatch match;
             if (regex_search(remaining, match, regex("^([0-9]+)"))) {
                 token = Token(NUMBER, match[1].str());
+            } else if (regex_search(remaining, match, regex("^(\\+)"))) {
+                token = Token(PLUS, match[1].str());
             } else if (regex_search(remaining, match, regex("^(\\-)"))) {
                 token = Token(MINUS, match[1].str());
+            } else if (regex_search(remaining, match, regex("^(\\*)"))) {
+                token = Token(MULTIPLY, match[1].str());
+            } else if (regex_search(remaining, match, regex("^(\\/)"))) {
+                token = Token(DIVIDE, match[1].str());
+            } else if (regex_search(remaining, match, regex("^(\\^)"))) {
+                token = Token(POWER, match[1].str());
+            } else if (regex_search(remaining, match, regex("^(\\()"))) {
+                token = Token(LPAREN, match[1].str());
+            } else if (regex_search(remaining, match, regex("^(\\))"))) {
+                token = Token(RPAREN, match[1].str());
             } else if (regex_search(remaining, match, regex("^(\\s+)"))) {
                 token = Token(WHITESPACE, match[1].str());
                 removeToken(token);
@@ -92,13 +111,37 @@ public:
     virtual ~ASTNode() = default;
 };
 
+class ASTNodeAdd final : public ASTNode {
+public:
+    ASTNode *pLeft;
+    ASTNode *pRight;
+
+    ASTNodeAdd(ASTNode *pLeft, ASTNode *pRight)
+        : pLeft(pLeft), pRight(pRight) {
+    }
+
+    ~ASTNodeAdd() override {
+        delete pLeft;
+        delete pRight;
+    }
+
+    int process() override {
+        return pLeft->process() + pRight->process();
+    }
+
+    string toString() override {
+        return "add(" + pLeft->toString() + ", " + pRight->toString() + ")";
+    }
+};
+
 class ASTNodeSubtract final : public ASTNode {
 public:
     ASTNode *pLeft;
     ASTNode *pRight;
 
     ASTNodeSubtract(ASTNode *pLeft, ASTNode *pRight)
-        : pLeft(pLeft), pRight(pRight) { ; }
+        : pLeft(pLeft), pRight(pRight) {
+    }
 
     ~ASTNodeSubtract() override {
         delete pLeft;
@@ -111,6 +154,75 @@ public:
 
     string toString() override {
         return "subtract(" + pLeft->toString() + ", " + pRight->toString() + ")";
+    }
+};
+
+class ASTNodeMultiply final : public ASTNode {
+public:
+    ASTNode *pLeft;
+    ASTNode *pRight;
+
+    ASTNodeMultiply(ASTNode *pLeft, ASTNode *pRight)
+        : pLeft(pLeft), pRight(pRight) {
+    }
+
+    ~ASTNodeMultiply() override {
+        delete pLeft;
+        delete pRight;
+    }
+
+    int process() override {
+        return pLeft->process() * pRight->process();
+    }
+
+    string toString() override {
+        return "multiply(" + pLeft->toString() + ", " + pRight->toString() + ")";
+    }
+};
+
+class ASTNodeDivide final : public ASTNode {
+public:
+    ASTNode *pLeft;
+    ASTNode *pRight;
+
+    ASTNodeDivide(ASTNode *pLeft, ASTNode *pRight)
+        : pLeft(pLeft), pRight(pRight) {
+    }
+
+    ~ASTNodeDivide() override {
+        delete pLeft;
+        delete pRight;
+    }
+
+    int process() override {
+        return pLeft->process() / pRight->process();
+    }
+
+    string toString() override {
+        return "divide(" + pLeft->toString() + ", " + pRight->toString() + ")";
+    }
+};
+
+class ASTNodePower final : public ASTNode {
+public:
+    ASTNode *pLeft;
+    ASTNode *pRight;
+
+    ASTNodePower(ASTNode *pLeft, ASTNode *pRight)
+        : pLeft(pLeft), pRight(pRight) {
+    }
+
+    ~ASTNodePower() override {
+        delete pLeft;
+        delete pRight;
+    }
+
+    int process() override {
+        return static_cast<int>(std::pow(pLeft->process(), pRight->process()));
+    }
+
+    string toString() override {
+        return "power(" + pLeft->toString() + ", " + pRight->toString() + ")";
     }
 };
 
@@ -137,14 +249,46 @@ public:
 
 class ASTParser {
     ASTNode *expr(Lexer &lexer) {
-        ASTNode *pLeft = factor(lexer);
+        ASTNode *pLeft = term(lexer);
         Token token;
-        while (lexer.getNextToken(token) && token.type == MINUS) {
+        while (lexer.getNextToken(token) && (token.type == PLUS || token.type == MINUS)) {
             lexer.removeToken(token);
-            ASTNode *pRight = factor(lexer);
-            pLeft = new ASTNodeSubtract(pLeft, pRight);
+            ASTNode *pRight = term(lexer);
+            if (token.type == PLUS) {
+                pLeft = new ASTNodeAdd(pLeft, pRight);
+            } else {
+                pLeft = new ASTNodeSubtract(pLeft, pRight);
+            }
         }
 
+        return pLeft;
+    }
+
+    ASTNode *term(Lexer &lexer) {
+        ASTNode *pLeft = power(lexer);
+        Token token;
+        while (lexer.getNextToken(token) && (token.type == MULTIPLY || token.type == DIVIDE)) {
+            lexer.removeToken(token);
+            ASTNode *pRight = power(lexer);
+            if (token.type == MULTIPLY) {
+                pLeft = new ASTNodeMultiply(pLeft, pRight);
+            } else {
+                pLeft = new ASTNodeDivide(pLeft, pRight);
+            }
+        }
+
+        return pLeft;
+    }
+
+    ASTNode *power(Lexer &lexer) {
+        ASTNode *pLeft = factor(lexer);
+        Token token;
+        if (lexer.getNextToken(token) && token.type == POWER) {
+            lexer.removeToken(token);
+            // NOTE: power operators are right-associative instead of left associative like everything else
+            ASTNode *pRight = power(lexer);
+            pLeft = new ASTNodePower(pLeft, pRight);
+        }
         return pLeft;
     }
 
@@ -155,6 +299,15 @@ class ASTParser {
         if (token.type == NUMBER) {
             lexer.removeToken(token);
             pNode = new ASTNodeNumber(stoi(token.value));
+        } else if (token.type == LPAREN) {
+            lexer.removeToken(token);
+            pNode = expr(lexer);
+            lexer.getNextToken(token);
+            if (token.type == RPAREN) {
+                lexer.removeToken(token);
+            } else {
+                throw std::runtime_error("missing right parenthesis");
+            }
         } else {
             throw std::runtime_error("parse error");
         }
@@ -172,28 +325,69 @@ public:
 
 class EvalParser {
     int expr(Lexer &lexer) {
-        int pLeft = factor(lexer);
+        int left = term(lexer);
         Token token;
-        while (lexer.getNextToken(token) && token.type == MINUS) {
+        while (lexer.getNextToken(token) && (token.type == PLUS || token.type == MINUS)) {
             lexer.removeToken(token);
-            const int pRight = factor(lexer);
-            pLeft = pLeft - pRight;
+            const int right = term(lexer);
+            if (token.type == PLUS) {
+                left = left + right;
+            } else {
+                left = left - right;
+            }
         }
 
-        return pLeft;
+        return left;
+    }
+
+    int term(Lexer &lexer) {
+        int left = power(lexer);
+        Token token;
+        while (lexer.getNextToken(token) && (token.type == MULTIPLY || token.type == DIVIDE)) {
+            lexer.removeToken(token);
+            const int right = power(lexer);
+            if (token.type == MULTIPLY) {
+                left = left * right;
+            } else {
+                left = left / right;
+            }
+        }
+
+        return left;
+    }
+
+    int power(Lexer &lexer) {
+        int left = factor(lexer);
+        Token token;
+        if (lexer.getNextToken(token) && token.type == POWER) {
+            lexer.removeToken(token);
+            // NOTE: power operators are right-associative instead of left associative like everything else
+            const int right = power(lexer);
+            left = static_cast<int>(std::pow(left, right));
+        }
+        return left;
     }
 
     int factor(Lexer &lexer) {
         Token token;
         lexer.getNextToken(token);
-        int pNode;
+        int num;
         if (token.type == NUMBER) {
             lexer.removeToken(token);
-            pNode = stoi(token.value);
+            num = stoi(token.value);
+        } else if (token.type == LPAREN) {
+            lexer.removeToken(token);
+            num = expr(lexer);
+            lexer.getNextToken(token);
+            if (token.type == RPAREN) {
+                lexer.removeToken(token);
+            } else {
+                throw std::runtime_error("missing right parenthesis");
+            }
         } else {
             throw std::runtime_error("parse error");
         }
-        return pNode;
+        return num;
     }
 
 public:
@@ -214,7 +408,13 @@ int main() {
         {"1", 1},
         {"2-1", 1},
         {"5 - 4 - 3", -2},
-        {"2 - 1", 1}
+        {"2 - 1", 1},
+        {"2 * 3 / 2", 3},
+        {" 2 *2 / 3", 1},
+        {"2 - 2 * 3", -4},
+        {"(2 - 2) * 3", 0},
+        {"2 ^ 2 ^ 3", 256},
+        {"(1 - 2 ^ 2 + 1) * 3", -6}
     };
 
     int failedTest = 0;
